@@ -4,6 +4,7 @@
 // Usage:  node scripts/sync.mjs <locationId>
 //         node scripts/sync.mjs            (syncs all installed locations)
 
+import "../lib/env.js";
 import { syncLocation } from "../lib/sync.js";
 import { listLocations } from "../lib/tokens.js";
 

@@ -10,6 +10,11 @@ const healthClass = (h) => (h >= 70 ? "g" : h >= 40 ? "w" : "b");
 const pct = (n) => `${Math.round(n * 100)}%`;
 const fmtType = (t) => (t || "").replace(/_/g, " ");
 const fmtDate = (s) => (s ? new Date(s).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+const modeLabel = (m) => ({
+  demo: "Demo fixture mode",
+  live: "Live HighLevel sandbox",
+  "live-awaiting-install": "Live mode awaiting install"
+}[m] || "Unknown mode");
 
 const app = createApp({
   setup() {
@@ -19,6 +24,11 @@ const app = createApp({
     const agent = ref(null);
     const call = ref(null);
     const useActions = ref([]);
+    const params = new URLSearchParams(window.location.search);
+    const pageContext = {
+      locationId: params.get("location_id"),
+      userEmail: params.get("user_email")
+    };
 
     async function goOverview() {
       view.name = "overview"; loading.value = true;
@@ -44,8 +54,8 @@ const app = createApp({
       return flaggedSpans.value.some(d => turn.tStart >= d.span.start - 0.01 && turn.tStart <= d.span.end + 0.01);
     }
 
-    return { view, loading, overview, agent, call, useActions,
-      goOverview, goAgent, goCall, healthClass, pct, fmtType, fmtDate, turnFlagged };
+    return { view, loading, overview, agent, call, useActions, pageContext,
+      goOverview, goAgent, goCall, healthClass, pct, fmtType, fmtDate, modeLabel, turnFlagged };
   },
   template: `
   <div class="app">
@@ -56,6 +66,16 @@ const app = createApp({
       </div>
       <a class="btn" @click="goOverview">Overview</a>
     </header>
+
+    <div v-if="overview?.status" class="statusbar">
+      <span class="pill" :class="overview.status.mode === 'live' ? 'good' : overview.status.mode === 'demo' ? 'warn' : 'mute'">
+        {{ modeLabel(overview.status.mode) }}
+      </span>
+      <span v-if="pageContext.locationId">Embedded location: {{ pageContext.locationId }}</span>
+      <span v-else-if="overview.status.lastSyncLocationId">Synced location: {{ overview.status.lastSyncLocationId }}</span>
+      <span v-if="overview.status.lastSyncAt">Last synced {{ fmtDate(overview.status.lastSyncAt) }}</span>
+      <span v-if="overview.status.lastAnalyzedAt">Last analyzed {{ fmtDate(overview.status.lastAnalyzedAt) }}</span>
+    </div>
 
     <div v-if="loading" class="empty">Loading…</div>
 
@@ -116,7 +136,7 @@ const app = createApp({
       <div class="split">
         <div>
           <div class="card">
-            <h2>Recommendations <span class="muted">— ranked by severity × frequency</span></h2>
+            <h2>Prompt/script recommendations <span class="muted">— ranked by severity × frequency</span></h2>
             <div v-if="!agent.recommendations.length" class="empty">No issues found.</div>
             <div v-for="r in agent.recommendations" :key="r.signature" class="rec">
               <div class="rhead">
@@ -136,6 +156,20 @@ const app = createApp({
           </div>
         </div>
         <div>
+          <div class="card">
+            <h2>Observability parameters</h2>
+            <div class="muted">Goal: {{ agent.agent.goal || 'No explicit goal found; using configured KPI template.' }}</div>
+            <ul class="checklist" style="margin-top:8px">
+              <li v-for="s in agent.agent.requiredSteps" :key="s.key">
+                <span class="dot g"></span> {{ s.label }}
+              </li>
+            </ul>
+            <div class="meta">
+              Type: {{ fmtType(agent.agent.type) }} ·
+              Min health: {{ agent.agent.thresholds.minHealth ?? 70 }} ·
+              Max dead air: {{ agent.agent.thresholds.maxDeadAirSec ?? 'n/a' }}s
+            </div>
+          </div>
           <div class="card">
             <h2>Failure breakdown</h2>
             <table>

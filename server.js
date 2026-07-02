@@ -7,6 +7,7 @@
 //
 // Run: `node server.js`  (env: PORT, LLM_API_KEY, GHL_* — see .env.example)
 
+import "./lib/env.js";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -62,7 +63,8 @@ const server = createServer(async (req, res) => {
 
   try {
     // ---- JSON API -------------------------------------------------------
-    if (path === "/api/overview") return send(res, 200, store.overview());
+    if (path === "/api/status") return send(res, 200, store.status({ locations: listLocations() }));
+    if (path === "/api/overview") return send(res, 200, { ...store.overview(), status: store.status({ locations: listLocations() }) });
     if (path === "/api/use-actions") return send(res, 200, store.useActionsQueue());
     if (path.startsWith("/api/agents/")) {
       const id = decodeURIComponent(path.split("/")[3]);
@@ -112,6 +114,7 @@ const server = createServer(async (req, res) => {
       }
       const tokens = await exchangeCode(code);
       const saved = saveTokens(tokens);
+      store.init({ seedFixtures: false, mode: "live" });
       // Fire-and-forget the initial sync so the redirect returns quickly.
       syncLocation(saved.locationId)
         .then(r => console.log(`[install] location ${saved.locationId}: synced ${r.agents} agents, ${r.calls} calls`))
@@ -119,7 +122,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, `Installed for location ${saved.locationId}. Syncing your agents and call history now — you can close this tab and open the Copilot.`);
     }
 
-    if (path === "/health") return send(res, 200, { ok: true, locations: listLocations().length, ...store.counts() });
+    if (path === "/health") return send(res, 200, { ok: true, ...store.status({ locations: listLocations() }) });
 
     return serveStatic(res, path);
   } catch (err) {
@@ -133,7 +136,8 @@ const server = createServer(async (req, res) => {
 async function boot() {
   const installed = hasTokens();
   const seedFixtures = process.env.SEED_FIXTURES !== "false" && !installed;
-  store.init({ seedFixtures });
+  const mode = installed ? "live" : seedFixtures ? "demo" : "live-awaiting-install";
+  store.init({ seedFixtures, mode });
 
   if (installed) {
     for (const loc of listLocations()) {

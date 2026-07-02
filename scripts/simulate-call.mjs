@@ -6,6 +6,8 @@
 //
 // Requires the server booted in DEMO mode (fixtures) so agent_dental_booking exists.
 
+import "../lib/env.js";
+
 const PORT = process.env.PORT || 3000;
 
 const webhookEnvelope = {
