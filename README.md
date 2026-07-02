@@ -1,0 +1,110 @@
+# Voice AI Observability Copilot
+
+Automated **Monitor + Analyze** for HighLevel Voice AI agents. It ingests call transcripts, scores every call against the agent's own goals/KPIs, flags deviations and missed opportunities, and turns them into ranked, copy-paste prompt fixes — all inside a dashboard that embeds in HighLevel as a Marketplace Custom Page.
+
+This closes the **Validation Flywheel**: agent runs → calls are scored → failures become recommendations → operator edits the prompt → next calls validate the change.
+
+> Design rationale and the full integration surface are in [`ARCHITECTURE.md`](./ARCHITECTURE.md). A narrative of how it was built (and what was deliberately *not* built) is in [`HOW_I_BUILT_IT.md`](./HOW_I_BUILT_IT.md).
+
+## Quick start
+
+```bash
+node server.js          # needs Node 18+; no install step, no dependencies
+# open http://localhost:3000
+```
+
+That's it — the app boots from fixture transcripts, scores them, and serves the dashboard. Optionally `cp .env.example .env` to add an LLM key or live GHL credentials.
+
+```bash
+npm test                # runs the deterministic-engine unit tests (node --test)
+```
+
+## What you'll see
+
+1. **Overview** — portfolio KPIs (calls scored, goal-completion, avg health, open Use-Actions), an agent-health table ranked by composite health, and the Use-Actions queue (segments needing a human or worth training on).
+2. **Agent deep-dive** — KPI summary, failure breakdown, and **ranked recommendations** (severity × frequency) each with rationale, a copy-paste prompt diff, confidence, and links to the evidence calls.
+3. **Call / transcript viewer** — the transcript with flagged segments highlighted inline, a pass/fail KPI checklist, sentiment trajectory, and the list of deviations with timestamps.
+
+## Architecture at a glance
+
+```
+Voice AI calls ──► /webhooks/ghl ─┐
+                                  ├─► store ─► engine.js (deterministic KPIs/deviations)
+GHL Call Log API ─► backfill ─────┘                 └─► analysis.js (ranked recs; optional LLM)
+                                                              │
+                       Vue 3 dashboard (Custom Page) ◄── JSON API (server.js)
+```
+
+- **`lib/engine.js`** — pure, deterministic scoring. Runs on 100% of calls; fully unit-tested. Reliability backbone.
+- **`lib/analysis.js`** — aggregates deviations into ranked recommendations. Rule-based by default; upgrades the top recommendation with a real LLM call when `LLM_API_KEY` is set (OpenAI by default). Both paths emit the same shape.
+- **`lib/ghl.js`** — HighLevel client: OAuth token exchange/refresh, Voice AI Agents + Call Log endpoints, payload normalization.
+- **`lib/sync.js`** — pulls real agents (merged with your observability config) and backfills call history on install.
+- **`lib/tokens.js`** — per-location OAuth token store with auto-refresh (`data/tokens.json`).
+- **`lib/webhook.js`** — verifies HighLevel webhook signatures (Ed25519 `X-GHL-Signature`, RSA `X-WH-Signature` fallback).
+- **`config/observability.json`** — the operator-editable KPI/required-step config layered onto each live agent.
+- **`server.js`** — zero-dependency `http` server: JSON API, dashboard hosting, signature-verified `/webhooks/ghl`, `/oauth/callback`.
+
+Why the deterministic-core / LLM-judge split? Rules are fast, free, and testable for hard checks (was a step present? was a field captured?); the LLM is reserved for judgment and language (root cause, the actual fix). Running the LLM *after* the deterministic pass means the dashboard still works — and stays cheap — even with no key or a rate-limited provider.
+
+## Two run modes
+
+- **DEMO (default, no setup):** `node server.js` with no `.env`. Boots from `fixtures/`, so the dashboard is populated immediately. Use `npm run simulate` (with `VERIFY_WEBHOOKS=false`) to push a live call through the webhook and watch it score.
+- **LIVE (real HighLevel):** once the app is installed (OAuth completed), the server ignores fixtures, syncs real agents, backfills real call history, and ingests new calls via signed webhooks.
+
+## Install into a HighLevel sandbox (live mode)
+
+1. **Expose the server** over HTTPS so HighLevel can reach the webhook + iframe (`ngrok http 3000`, Cloudflare Tunnel, or deploy to a host).
+2. **Register the app:** Marketplace Portal → **My Apps** → your app.
+   - Redirect URL → `https://<host>/oauth/callback`
+   - Scopes: Voice AI **agents** + **call logs** read (set while the app is in draft).
+   - Webhooks → subscribe to the Voice AI call/transcript events, URL `https://<host>/webhooks/ghl`.
+   - **Custom Page** → `https://<host>/?location_id={{location.id}}&user_email={{user.email}}` (left-nav placement).
+3. **`.env`:** set `GHL_CLIENT_ID`, `GHL_CLIENT_SECRET`, `GHL_REDIRECT_URI`, and `LLM_API_KEY` (+ `LLM_PROVIDER=openai`). Start `node server.js`.
+4. **Install** the app into your sandbox → complete OAuth. On the callback the server stores tokens, then **auto-syncs agents and backfills call history** for that location. The Copilot appears in the sandbox left nav.
+5. New calls arrive in real time via the signed webhook. Re-sync any time with `npm run sync <locationId>` (e.g. after adding an agent).
+
+The server sends a `frame-ancestors` CSP allowing HighLevel domains and no `X-Frame-Options`, per the Custom Pages hosting rules. Tokens persist in `data/tokens.json` (gitignored) and auto-refresh.
+
+> **Tune what agents are scored against:** GHL supplies each agent's id/name/prompt; the required-step checklist and KPI thresholds are a QA decision and live in `config/observability.json` (resolved `byAgentId` > `byType` > `defaults`). Edit that file to match your scripts.
+
+## What's functional vs. mocked
+
+| Component | Status |
+|---|---|
+| Deterministic KPI/deviation engine | **Functional**, unit-tested |
+| Ranked recommendations (rule-based) | **Functional** |
+| LLM-written recommendations | **Functional** with `LLM_API_KEY` (real OpenAI call by default) |
+| Vue dashboard (3 surfaces) | **Functional** |
+| OAuth install + token persistence/refresh | **Functional** (`lib/tokens.js`, `/oauth/callback`) |
+| Real agent sync + Call Log backfill on install | **Functional** (`lib/sync.js`) |
+| Signed webhook ingestion `/webhooks/ghl` | **Functional** (Ed25519/RSA verified; `VERIFY_WEBHOOKS=false` to test locally) |
+| Sample transcripts (`fixtures/`) | **Demo seed only** — used when the app isn't installed yet; ignored in live mode |
+
+The entire GHL pipeline (OAuth → token refresh → agent sync → call backfill → signed webhooks → scoring → recommendations) is implemented and runs. The only thing I could not do from the build environment is execute it against a live sandbox (that environment had no Node runtime and no HighLevel account) — so those code paths are written to spec and verified by reading, not by a live round-trip. With your credentials + a runtime, `node server.js` + installing the app exercises them end to end. Run `npm test` for the engine tests.
+
+## Team of One (Product · Design · Engineering · QA)
+
+- **Product** — fixed the personas, KPI taxonomy, and deviation types before coding, so the engine answers real questions. Scope kept to the two loops (Monitor + Analyze); the "auto-apply prompt edits" loop is deliberately deferred.
+- **Design** — three surfaces, one job each (triage → fix → evidence), styled to feel native to HighLevel; every number drills down to the calls behind it.
+- **Engineering** — the deterministic-core / LLM-judge split is the key bet; zero-dependency, zero-build so it's trivial to run and review.
+- **QA** — deterministic engine unit-tested against fixtures with known expected outcomes; LLM output is validated before it's trusted (fails soft to rule-based); a renter case guards against false-positive penalties.
+
+## Project structure
+
+```
+server.js               zero-dep HTTP server (API + static + webhook + oauth)
+lib/engine.js           deterministic KPI/deviation scoring (pure)
+lib/analysis.js         recommendation aggregation + optional LLM enrichment
+lib/store.js            in-memory store (fixtures in demo, live data in prod)
+lib/ghl.js              HighLevel OAuth + Agents + Call Log client + normalization
+lib/tokens.js           per-location OAuth token store + auto-refresh
+lib/webhook.js          Ed25519 / RSA webhook signature verification
+lib/sync.js             live agent sync + call-log backfill
+config/observability.json  operator-defined KPI/required-step config
+public/                 Vue 3 dashboard (index.html, app.js, styles.css)
+fixtures/               sample agents + call transcripts (demo seed)
+scripts/                simulate-call + manual sync CLIs
+test/engine.test.js     node:test unit tests
+ARCHITECTURE.md         design doc / integration surface
+HOW_I_BUILT_IT.md       build narrative + decisions
+```

@@ -1,0 +1,34 @@
+{
+  "_comment": "Operator-defined observability config layered onto real GHL Voice AI agents. GHL provides the agent's id/name/prompt; the required-step checklist and KPI thresholds are a QA decision, so they live here. Resolution order: byAgentId > byType > defaults. Edit this file to tune what each agent is scored against.",
+  "defaults": {
+    "thresholds": { "minHealth": 70, "maxDurationSec": 420, "deadAirSec": 4 },
+    "requiredSteps": [
+      { "key": "greeting", "label": "Greet + identify company", "patterns": ["thanks for calling", "how can i help", "how may i help", "calling"] },
+      { "key": "identify_caller", "label": "Confirm caller identity / name", "patterns": ["who am i speaking with", "your name", "may i have your name", "speaking with"] },
+      { "key": "confirm_next_step", "label": "Confirm a clear next step", "patterns": ["i've scheduled", "you're booked", "i'll have someone", "next step", "follow up", "confirmed"] }
+    ]
+  },
+  "byType": {
+    "booking": {
+      "thresholds": { "minHealth": 70, "maxDurationSec": 360, "deadAirSec": 4 },
+      "requiredSteps": [
+        { "key": "greeting", "label": "Greet + identify practice", "patterns": ["thanks for calling", "how can i help", "how may i help"] },
+        { "key": "identify_caller", "label": "Confirm caller identity / name", "patterns": ["who am i speaking with", "your name", "may i have your name", "speaking with"] },
+        { "key": "capture_callback", "label": "Capture callback number", "patterns": ["best number", "callback number", "phone number", "number to reach"] },
+        { "key": "confirm_timezone", "label": "Confirm timezone before offering slots", "patterns": ["time zone", "timezone", "what time zone", "which timezone"] },
+        { "key": "offer_slot", "label": "Offer an appointment slot", "patterns": ["available", "we have an opening", "how about", "does that work", "i can offer"] },
+        { "key": "confirm_booking", "label": "Confirm the booking", "patterns": ["you're booked", "you are booked", "confirmed for", "i've scheduled", "i have you down"] }
+      ]
+    },
+    "qualification": {
+      "thresholds": { "minHealth": 70, "maxDurationSec": 300, "deadAirSec": 4 },
+      "requiredSteps": [
+        { "key": "greeting", "label": "Greet + identify company", "patterns": ["thanks for calling", "how can i help"] },
+        { "key": "homeownership", "label": "Confirm homeownership", "patterns": ["own your home", "homeowner", "do you own", "rent or own"] },
+        { "key": "monthly_bill", "label": "Ask monthly electricity bill", "patterns": ["electricity bill", "monthly bill", "power bill", "how much do you pay", "utility bill"] },
+        { "key": "book_consult", "label": "Book consult if qualified", "patterns": ["schedule a consultation", "book a consult", "set up a consultation", "get you scheduled"] }
+      ]
+    }
+  },
+  "byAgentId": {}
+}

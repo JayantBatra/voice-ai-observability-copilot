@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voice AI Observability Copilot — Preview</title>
+<!--
+  STANDALONE PREVIEW. Open this file directly in a browser — no Node needed.
+  It inlines the EXACT same engine (lib/engine.js) and analysis (lib/analysis.js)
+  logic and the same fixtures, and runs the scoring in-browser. This mirrors what
+  `node server.js` serves; the only differences are (a) no live GHL/webhook, and
+  (b) recommendations are rule-based (the LLM path only runs server-side with a key).
+  Requires internet for the Vue CDN script.
+-->
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--ink:#1c2434;--muted:#6b7688;--line:#e6eaf0;--brand:#2f6df6;--brand-ink:#1d4fd0;--good:#1a9d6b;--warn:#d98a00;--bad:#d1435b;--chip:#eef2f8}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+a{color:var(--brand-ink);cursor:pointer;text-decoration:none}.app{max-width:1100px;margin:0 auto;padding:20px}
+header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}header.top h1{font-size:18px;margin:0}header.top .sub{color:var(--muted);font-size:12px}
+.crumbs{font-size:13px;color:var(--muted);margin-bottom:14px}.crumbs a::after{content:" / ";color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}.kpi .label{color:var(--muted);font-size:12px}.kpi .value{font-size:26px;font-weight:600;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}.card h2{font-size:15px;margin:0 0 12px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);font-size:13px}th{color:var(--muted);font-weight:600;font-size:12px}tr.clickable:hover{background:#fafbfe;cursor:pointer}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}.pill.good{background:#e5f5ee;color:var(--good)}.pill.warn{background:#fdf2df;color:var(--warn)}.pill.bad{background:#fdeaee;color:var(--bad)}.pill.mute{background:var(--chip);color:var(--muted)}
+.health{font-weight:600}.health.g{color:var(--good)}.health.w{color:var(--warn)}.health.b{color:var(--bad)}
+.rec{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}.rec .rhead{display:flex;justify-content:space-between;align-items:center;gap:10px}.rec .title{font-weight:600;font-size:14px}.rec .why{color:var(--muted);margin:8px 0}
+.diff{background:#0f1729;color:#cfe3d0;padding:10px 12px;border-radius:8px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;white-space:pre-wrap}
+.meta{color:var(--muted);font-size:12px;margin-top:8px}.src{font-size:11px;text-transform:uppercase;letter-spacing:.04em}.src.llm{color:var(--brand-ink)}.src.rule{color:var(--muted)}
+.transcript .turn{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}.transcript .role{width:62px;flex:none;color:var(--muted);font-size:12px}.transcript .turn.flag{background:#fff7f8;border-radius:6px;padding-left:8px}.transcript .t{color:#9aa4b2;font-size:11px}
+.split{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}.checklist li{list-style:none;padding:5px 0;display:flex;align-items:center;gap:8px}ul.checklist{padding:0;margin:0}.dot{width:8px;height:8px;border-radius:50%;display:inline-block}.dot.g{background:var(--good)}.dot.b{background:var(--bad)}
+.tag{background:var(--chip);color:var(--muted);border-radius:6px;padding:1px 7px;font-size:11px}.btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:12px}.btn:hover{border-color:var(--brand);color:var(--brand-ink)}
+.muted{color:var(--muted)}.empty{color:var(--muted);padding:12px 0}.banner{background:#eef3ff;border:1px solid #d5e0ff;color:#274690;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:16px}
+@media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ============================ FIXTURES ============================ */
+const AGENTS = [
+  {id:"agent_dental_booking",name:"Dental Front Desk Booker",type:"booking",goal:"Book a dental appointment for the caller",
+   promptSnapshot:"Front desk for Bright Smile Dental...",
+   requiredSteps:[
+     {key:"greeting",label:"Greet + identify practice",patterns:["bright smile","thanks for calling","how can i help","how may i help"]},
+     {key:"identify_caller",label:"Confirm caller identity / name",patterns:["who am i speaking with","your name","may i have your name","speaking with"]},
+     {key:"capture_callback",label:"Capture callback number",patterns:["best number","callback number","phone number","number to reach"]},
+     {key:"confirm_timezone",label:"Confirm timezone before offering slots",patterns:["time zone","timezone","what time zone","which timezone"]},
+     {key:"offer_slot",label:"Offer an appointment slot",patterns:["available","we have an opening","how about","does that work","i can offer"]},
+     {key:"confirm_booking",label:"Confirm the booking",patterns:["you're booked","you are booked","confirmed for","i've scheduled","i have you down"]}
+   ],thresholds:{minHealth:70,maxDurationSec:360,deadAirSec:4}},
+  {id:"agent_solar_qual",name:"Solar Lead Qualifier",type:"qualification",goal:"Qualify the caller for a solar consultation (homeowner + monthly bill over $120) and book a consult",
+   promptSnapshot:"Qualify inbound solar leads for SunPath...",
+   requiredSteps:[
+     {key:"greeting",label:"Greet + identify company",patterns:["sunpath","thanks for calling","how can i help"]},
+     {key:"homeownership",label:"Confirm homeownership",patterns:["own your home","homeowner","do you own","rent or own"]},
+     {key:"monthly_bill",label:"Ask monthly electricity bill",patterns:["electricity bill","monthly bill","power bill","how much do you pay","utility bill"]},
+     {key:"book_consult",label:"Book consult if qualified",patterns:["schedule a consultation","book a consult","set up a consultation","get you scheduled"]}
+   ],thresholds:{minHealth:70,maxDurationSec:300,deadAirSec:4}}
+];
+const CALLS = [
+  {id:"call_d1",agentId:"agent_dental_booking",contactName:"Maria Alvarez",startedAt:"2026-06-30T15:02:00Z",durationSec:142,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling Bright Smile Dental, how can I help you today?",tStart:0,tEnd:4},
+    {role:"caller",text:"Hi, I'd like to book a cleaning.",tStart:4,tEnd:7},
+    {role:"agent",text:"Happy to help. May I have your name please?",tStart:7,tEnd:10},
+    {role:"caller",text:"Maria Alvarez.",tStart:10,tEnd:12},
+    {role:"agent",text:"Thanks Maria. What's the best number to reach you?",tStart:12,tEnd:15},
+    {role:"caller",text:"It's 415-555-0182.",tStart:15,tEnd:19},
+    {role:"agent",text:"Great. And just to offer the right times, what time zone are you in?",tStart:19,tEnd:23},
+    {role:"caller",text:"Pacific.",tStart:23,tEnd:24},
+    {role:"agent",text:"Perfect. We have an opening Thursday at 10am Pacific, does that work?",tStart:24,tEnd:29},
+    {role:"caller",text:"Yes that's great.",tStart:29,tEnd:31},
+    {role:"agent",text:"Wonderful, you're booked for Thursday at 10am. See you then!",tStart:31,tEnd:36}]},
+  {id:"call_d2",agentId:"agent_dental_booking",contactName:"Tom Becker",startedAt:"2026-06-30T16:20:00Z",durationSec:121,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling Bright Smile Dental, how can I help?",tStart:0,tEnd:4},
+    {role:"caller",text:"I need to see someone about a toothache.",tStart:4,tEnd:7},
+    {role:"agent",text:"Sorry to hear that. Can I get your name?",tStart:7,tEnd:10},
+    {role:"caller",text:"Tom Becker.",tStart:10,tEnd:12},
+    {role:"agent",text:"Thanks Tom. What's a good callback number?",tStart:12,tEnd:15},
+    {role:"caller",text:"212-555-0147.",tStart:15,tEnd:19},
+    {role:"agent",text:"We have an opening tomorrow at 9am, does that work?",tStart:19,tEnd:23},
+    {role:"caller",text:"Wait, 9am your time? I'm on the East Coast, that's confusing.",tStart:23,tEnd:28},
+    {role:"agent",text:"It's 9am. Would you like it?",tStart:28,tEnd:31},
+    {role:"caller",text:"I'm not sure what that is for me. Let me call back later.",tStart:31,tEnd:36},
+    {role:"agent",text:"Okay, thanks for calling.",tStart:36,tEnd:38}]},
+  {id:"call_d3",agentId:"agent_dental_booking",contactName:"Priya Nair",startedAt:"2026-07-01T14:05:00Z",durationSec:98,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling Bright Smile Dental, how may I help you?",tStart:0,tEnd:4},
+    {role:"caller",text:"I want to book a checkup.",tStart:4,tEnd:6},
+    {role:"agent",text:"Sure, who am I speaking with?",tStart:6,tEnd:9},
+    {role:"caller",text:"Priya Nair.",tStart:9,tEnd:11},
+    {role:"agent",text:"Thanks Priya. What time zone are you in?",tStart:11,tEnd:14},
+    {role:"caller",text:"Central.",tStart:14,tEnd:15},
+    {role:"agent",text:"We have Friday at 2pm Central, does that work?",tStart:15,tEnd:19},
+    {role:"caller",text:"Yes.",tStart:19,tEnd:20},
+    {role:"agent",text:"Great, I've scheduled you for Friday at 2pm.",tStart:20,tEnd:24}]},
+  {id:"call_d4",agentId:"agent_dental_booking",contactName:"Greg Ottoman",startedAt:"2026-07-01T18:40:00Z",durationSec:176,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling Bright Smile Dental, how can I help?",tStart:0,tEnd:4},
+    {role:"caller",text:"I've been on hold twice already, this is ridiculous.",tStart:4,tEnd:8},
+    {role:"agent",text:"May I have your name?",tStart:8,tEnd:10},
+    {role:"caller",text:"You people keep asking the same thing. I'm really frustrated.",tStart:10,tEnd:15},
+    {role:"agent",text:"What's the best number to reach you?",tStart:15,tEnd:18},
+    {role:"caller",text:"That's not helpful. I just want to talk to a person.",tStart:18,tEnd:23},
+    {role:"agent",text:"We have an opening Monday at 11am, does that work?",tStart:23,tEnd:27},
+    {role:"caller",text:"No. This is a waste of time. Forget it.",tStart:27,tEnd:31},
+    {role:"agent",text:"Okay, thanks for calling.",tStart:31,tEnd:33}]},
+  {id:"call_d5",agentId:"agent_dental_booking",contactName:"Susan Lee",startedAt:"2026-07-01T19:12:00Z",durationSec:388,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling Bright Smile Dental, how can I help you today?",tStart:0,tEnd:4},
+    {role:"caller",text:"I'd like to book a cleaning for my son.",tStart:4,tEnd:7},
+    {role:"agent",text:"Of course. May I have your name?",tStart:7,tEnd:10},
+    {role:"caller",text:"Susan Lee.",tStart:10,tEnd:12},
+    {role:"agent",text:"Thanks. And the best callback number?",tStart:12,tEnd:15},
+    {role:"caller",text:"503-555-0190.",tStart:15,tEnd:19},
+    {role:"agent",text:"What time zone are you in?",tStart:19,tEnd:22},
+    {role:"caller",text:"Pacific.",tStart:30,tEnd:31},
+    {role:"agent",text:"We have Tuesday at 3pm Pacific, does that work?",tStart:45,tEnd:49},
+    {role:"caller",text:"Let me check my calendar... yes that works.",tStart:49,tEnd:54},
+    {role:"agent",text:"Great, you're booked for Tuesday at 3pm.",tStart:54,tEnd:58}]},
+  {id:"call_s1",agentId:"agent_solar_qual",contactName:"Derek Fields",startedAt:"2026-06-30T17:00:00Z",durationSec:108,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling SunPath, how can I help?",tStart:0,tEnd:3},
+    {role:"caller",text:"I saw your ad about solar savings.",tStart:3,tEnd:6},
+    {role:"agent",text:"Great! Do you own your home?",tStart:6,tEnd:9},
+    {role:"caller",text:"Yes, I own it.",tStart:9,tEnd:11},
+    {role:"agent",text:"And roughly what's your average monthly electricity bill?",tStart:11,tEnd:15},
+    {role:"caller",text:"About $210.",tStart:15,tEnd:17},
+    {role:"agent",text:"You're a great fit. Let's schedule a consultation. How's Thursday at 4pm?",tStart:17,tEnd:22},
+    {role:"caller",text:"Works for me.",tStart:22,tEnd:24},
+    {role:"agent",text:"Booked. A specialist will call you Thursday at 4pm.",tStart:24,tEnd:28}]},
+  {id:"call_s2",agentId:"agent_solar_qual",contactName:"Angela Ruiz",startedAt:"2026-07-01T13:30:00Z",durationSec:96,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling SunPath, how can I help?",tStart:0,tEnd:3},
+    {role:"caller",text:"I'm interested in solar for my house.",tStart:3,tEnd:6},
+    {role:"agent",text:"Do you own your home?",tStart:6,tEnd:9},
+    {role:"caller",text:"Yes I do.",tStart:9,tEnd:11},
+    {role:"agent",text:"And what's your average monthly electricity bill?",tStart:11,tEnd:15},
+    {role:"caller",text:"Around $200. And honestly I'd love to get started soon.",tStart:15,tEnd:20},
+    {role:"agent",text:"Great, thanks for the info. Have a nice day!",tStart:20,tEnd:24}]},
+  {id:"call_s3",agentId:"agent_solar_qual",contactName:"Frank Doyle",startedAt:"2026-07-01T16:45:00Z",durationSec:61,outcome:"completed",transcript:[
+    {role:"agent",text:"Thanks for calling SunPath, how can I help?",tStart:0,tEnd:3},
+    {role:"caller",text:"Do you do solar for apartments?",tStart:3,tEnd:6},
+    {role:"agent",text:"Do you own your home?",tStart:6,tEnd:9},
+    {role:"caller",text:"No, I rent.",tStart:9,tEnd:11},
+    {role:"agent",text:"Understood. Solar works best for homeowners, so it may not be a fit right now. Thanks for calling!",tStart:11,tEnd:17}]}
+];
+
+/* ============================ ENGINE (verbatim from lib/engine.js) ============================ */
+const SEVERITY_WEIGHT={high:30,medium:15,low:5};
+const DATA_CAPTURE_STEPS=new Set(["capture_callback","capture_email"]);
+const POSITIVE_WORDS=["great","perfect","yes","works","wonderful","thanks","good","sure"];
+const NEGATIVE_WORDS=["frustrated","ridiculous","annoyed","waste","not helpful","confusing","angry","forget it","no."];
+const INTENT_WORDS=["interested","love to","get started","sign me up","let's do it","ready to"];
+const COMPLIANCE_DENYLIST=["guarantee","100% cure","cure your","medical advice","risk free"];
+const GOAL_CONFIRM_PATTERNS=["you're booked","you are booked","i've scheduled","i have you down","booked for","booked.","a specialist will call","you're all set","confirmed for"];
+const EMAIL_RE=/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+const PHONE_RE=/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/;
+const textOf=(turns,role)=>turns.filter(t=>!role||t.role===role).map(t=>t.text.toLowerCase());
+function stepMatch(turns,step){for(let i=0;i<turns.length;i++){if(turns[i].role!=="agent")continue;const low=turns[i].text.toLowerCase();if(step.patterns.some(p=>low.includes(p)))return{passed:true,turnIndex:i,span:{start:turns[i].tStart,end:turns[i].tEnd}};}return{passed:false};}
+function detectSentiment(turns){const c=turns.filter(t=>t.role==="caller");const sc=txt=>{const low=txt.toLowerCase();let s=0;POSITIVE_WORDS.forEach(w=>{if(low.includes(w))s+=1;});NEGATIVE_WORDS.forEach(w=>{if(low.includes(w))s-=1;});return s;};const scores=c.map(t=>sc(t.text));const total=scores.reduce((a,b)=>a+b,0);const label=total<-1?"negative":total>1?"positive":"neutral";let worst=null,ws=0;c.forEach(t=>{const s=sc(t.text);if(s<ws){ws=s;worst=t;}});return{start:scores.length?(scores[0]<0?"negative":scores[0]>0?"positive":"neutral"):"neutral",end:scores.length?(scores[scores.length-1]<0?"negative":scores[scores.length-1]>0?"positive":"neutral"):"neutral",label,worstSpan:worst?{start:worst.tStart,end:worst.tEnd,text:worst.text}:null};}
+function detectQualified(turns){const t=textOf(turns,"caller").join(" ");const rents=/\b(i rent|renting|i'?m renting|no,? i rent)\b/.test(t);const owns=/\b(i own|own it|own my|yes,? i (do|own)|homeowner)\b/.test(t)&&!rents;const m=t.match(/\$\s?(\d{2,4})/);const bill=m?parseInt(m[1],10):null;return{owns,rents,bill,qualified:owns&&bill!=null&&bill>120};}
+function detectDeadAir(turns,sec){const g=[];for(let i=1;i<turns.length;i++){const gap=turns[i].tStart-turns[i-1].tEnd;if(gap>sec)g.push({start:turns[i-1].tEnd,end:turns[i].tStart,seconds:gap});}return g;}
+function detectCompliance(turns){const h=[];turns.forEach(t=>{if(t.role!=="agent")return;const low=t.text.toLowerCase();COMPLIANCE_DENYLIST.forEach(term=>{if(low.includes(term))h.push({term,span:{start:t.tStart,end:t.tEnd},text:t.text});});});return h;}
+function scoreCall(call,agent){
+  const turns=call.transcript||[];const deviations=[];const useActions=[];const th=agent.thresholds||{};const deadAirSec=th.deadAirSec??4;const maxDurationSec=th.maxDurationSec??600;
+  const steps=(agent.requiredSteps||[]).map(step=>{const m=stepMatch(turns,step);return{key:step.key,label:step.label,passed:m.passed,span:m.span||null,category:DATA_CAPTURE_STEPS.has(step.key)?"data":"script"};});
+  const callerText=textOf(turns,"caller").join(" ");const phoneCaptured=PHONE_RE.test(callerText);const emailCaptured=EMAIL_RE.test(callerText);
+  const sentiment=detectSentiment(turns);
+  const transcriptJoined=turns.map(t=>t.text.toLowerCase()).join(" ");
+  const goalCompleted=call.outcome==="transferred"?false:GOAL_CONFIRM_PATTERNS.some(p=>transcriptJoined.includes(p));
+  let expected=true,qualification=null;if(agent.type==="qualification"){qualification=detectQualified(turns);expected=qualification.qualified;}
+  const disqualified=agent.type==="qualification"&&qualification&&qualification.rents;const DQ=new Set(["monthly_bill","book_consult"]);
+  steps.filter(s=>!s.passed).forEach(s=>{if(disqualified&&DQ.has(s.key))return;if(s.category==="data")deviations.push({type:"data_gap",severity:"medium",stepKey:s.key,evidence:`Required data step never completed: ${s.label}`,span:null,fixCategory:"data_capture"});else deviations.push({type:"script_deviation",severity:"medium",stepKey:s.key,evidence:`Required step missing or out of order: ${s.label}`,span:null,fixCategory:"script_step"});});
+  if(agent.type==="booking"&&!phoneCaptured&&!deviations.some(d=>d.stepKey==="capture_callback"))deviations.push({type:"data_gap",severity:"medium",stepKey:"phone",evidence:"No callback number captured from the caller.",span:null,fixCategory:"data_capture"});
+  if(!goalCompleted&&expected){const intentPresent=INTENT_WORDS.some(w=>callerText.includes(w))||sentiment.label!=="negative";const span=turns.length?{start:turns[turns.length-1].tStart,end:turns[turns.length-1].tEnd}:null;if(agent.type==="qualification")deviations.push({type:"missed_opportunity",severity:"high",evidence:"Caller was qualified and showed intent, but no consultation was booked.",span,fixCategory:"closing"});else deviations.push({type:"missed_goal",severity:"high",evidence:intentPresent?"Caller intended to book but the call ended without a confirmed appointment.":"Call ended without meeting the agent's goal.",span,fixCategory:"closing"});}
+  if(sentiment.label==="negative"&&!goalCompleted)deviations.push({type:"recovery_failure",severity:"high",evidence:"Caller expressed frustration and the agent did not de-escalate or hand off before the call ended.",span:sentiment.worstSpan?{start:sentiment.worstSpan.start,end:sentiment.worstSpan.end}:null,fixCategory:"recovery"});
+  detectCompliance(turns).forEach(h=>deviations.push({type:"compliance_breach",severity:"high",evidence:`Agent used a prohibited phrase: "${h.term}".`,span:h.span,fixCategory:"compliance"}));
+  detectDeadAir(turns,deadAirSec).forEach(g=>deviations.push({type:"dead_air",severity:"low",evidence:`Silence of ${g.seconds}s between turns.`,span:{start:g.start,end:g.end},fixCategory:"latency"}));
+  if(call.durationSec>maxDurationSec)deviations.push({type:"long_call",severity:"low",evidence:`Call ran ${call.durationSec}s vs target ${maxDurationSec}s.`,span:null,fixCategory:"efficiency"});
+  deviations.forEach(d=>{if(d.type==="recovery_failure"||d.type==="compliance_breach")useActions.push({callId:call.id,reason:"human_review",span:d.span,note:d.evidence});else if((d.type==="missed_goal"||d.type==="missed_opportunity")&&d.span)useActions.push({callId:call.id,reason:"training",span:d.span,note:d.evidence});});
+  let health=100;deviations.forEach(d=>{health-=SEVERITY_WEIGHT[d.severity]||0;});health=Math.max(0,health);
+  return{callId:call.id,agentId:agent.id,kpis:{goalCompleted,expected,qualification,stepsPassed:steps.filter(s=>s.passed).length,stepsTotal:steps.length,steps,phoneCaptured,emailCaptured,sentiment:{start:sentiment.start,end:sentiment.end,label:sentiment.label},transferred:call.outcome==="transferred",durationSec:call.durationSec,turns:turns.length},deviations,useActions,health};
+}
+
+/* ============================ ANALYSIS (verbatim rule-based path from lib/analysis.js) ============================ */
+const SEVERITY_RANK={high:3,medium:2,low:1};
+const TEMPLATES={
+ "script_deviation:confirm_timezone":{title:"Confirm the caller's timezone before offering slots",rationale:"Calls where the agent proposed a time without first confirming the timezone led to confusion and drop-offs.",diff:"+ Before proposing any appointment time, ask for and restate the caller's timezone, then quote every slot in that timezone."},
+ "script_deviation:identify_caller":{title:"Always confirm who you're speaking with",rationale:"The agent skipped confirming the caller's name, which weakens booking accuracy and personalization.",diff:"+ Early in the call, ask 'Who am I speaking with?' and use the caller's name in follow-ups."},
+ "data_gap:capture_callback":{title:"Always capture a callback number",rationale:"Bookings were made or attempted without a callback number, creating no-show and follow-up risk.",diff:"+ Before confirming any appointment, ask 'What's the best number to reach you?' and read it back to confirm."},
+ "data_gap:phone":{title:"Always capture a callback number",rationale:"The caller's phone number was never captured on some calls, creating follow-up risk.",diff:"+ Ask for and confirm the best callback number before ending the call."},
+ "missed_goal":{title:"Reduce dropped bookings at the closing step",rationale:"Calls reached the point of booking but ended without a confirmed appointment.",diff:"+ When the caller hesitates, offer two concrete slots and explicitly confirm: 'Shall I lock in [slot]?' before closing."},
+ "missed_opportunity":{title:"Book the consult whenever the caller is qualified and interested",rationale:"Qualified, interested callers were thanked and released instead of being booked into a consultation.",diff:"+ If the caller owns their home and their bill is over $120, do NOT end the call — immediately offer a consultation time and confirm it."},
+ "recovery_failure":{title:"Add a de-escalation and human-handoff path",rationale:"Frustrated callers were met with scripted questions instead of acknowledgement or a transfer, and the calls were lost.",diff:"+ If the caller expresses frustration, acknowledge it once ('I hear you, let's sort this quickly') and offer to transfer to a human before continuing the script."},
+ "compliance_breach":{title:"Remove prohibited/compliance-risky language",rationale:"The agent used phrasing that may violate compliance guardrails.",diff:"+ Never use guarantees or medical/outcome claims. Stick to approved, factual phrasing."}
+};
+function signature(d){if((d.type==="script_deviation"||d.type==="data_gap")&&d.stepKey)return`${d.type}:${d.stepKey}`;return d.type;}
+function analyzeAgent(agent,results){
+  const groups=new Map();
+  for(const r of results)for(const d of r.deviations){if(d.type==="dead_air"||d.type==="long_call")continue;const sig=signature(d);if(!groups.has(sig))groups.set(sig,{sig,type:d.type,severity:d.severity,callIds:new Set()});groups.get(sig).callIds.add(r.callId);}
+  const recommendations=[...groups.values()].map(g=>{const tpl=TEMPLATES[g.sig]||TEMPLATES[g.type]||{title:`Address recurring ${g.type.replace(/_/g," ")}`,rationale:`Multiple calls showed ${g.type.replace(/_/g," ")}.`,diff:"+ Review these calls and adjust the agent prompt accordingly."};const frequency=g.callIds.size;const priority=SEVERITY_RANK[g.severity]*frequency;const confidence=Math.min(0.95,0.6+0.1*frequency);return{signature:g.sig,type:g.type,severity:g.severity,title:tpl.title,rationale:tpl.rationale,proposedPromptDiff:tpl.diff,frequency,priority,confidence:Number(confidence.toFixed(2)),supportingCallIds:[...g.callIds],source:"rule"};}).sort((a,b)=>b.priority-a.priority);
+  const failureBreakdown={};for(const r of results)for(const d of r.deviations)failureBreakdown[d.type]=(failureBreakdown[d.type]||0)+1;
+  const scored=results.length;const goalRate=scored?results.filter(r=>r.kpis.goalCompleted).length/scored:0;const avgHealth=scored?Math.round(results.reduce((a,r)=>a+r.health,0)/scored):0;
+  return{agentId:agent.id,summary:{callsScored:scored,goalCompletionRate:Number(goalRate.toFixed(2)),avgHealth,openRecommendations:recommendations.length},failureBreakdown,recommendations};
+}
+
+/* ============================ STORE (in-browser equivalent of lib/store.js) ============================ */
+const agentMap=new Map(AGENTS.map(a=>[a.id,a]));
+const callMap=new Map(CALLS.map(c=>[c.id,c]));
+const resultMap=new Map(CALLS.map(c=>[c.id,scoreCall(c,agentMap.get(c.agentId))]));
+const resultsForAgent=id=>[...resultMap.values()].filter(r=>r.agentId===id);
+function overview(){
+  const agents=AGENTS.map(agent=>{const rs=resultsForAgent(agent.id);const scored=rs.length;const goalRate=scored?rs.filter(r=>r.kpis.goalCompleted).length/scored:0;const avgHealth=scored?Math.round(rs.reduce((a,r)=>a+r.health,0)/scored):0;const f={};rs.forEach(r=>r.deviations.forEach(d=>{f[d.type]=(f[d.type]||0)+1;}));const topFailure=Object.entries(f).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;return{id:agent.id,name:agent.name,type:agent.type,goal:agent.goal,callsScored:scored,goalCompletionRate:Number(goalRate.toFixed(2)),avgHealth,topFailure,needsAttention:avgHealth<(agent.thresholds?.minHealth??70)};});
+  const all=[...resultMap.values()];const scored=all.length;
+  return{portfolio:{callsScored:scored,goalCompletionRate:scored?Number((all.filter(r=>r.kpis.goalCompleted).length/scored).toFixed(2)):0,avgHealth:scored?Math.round(all.reduce((a,r)=>a+r.health,0)/scored):0,openUseActions:all.reduce((a,r)=>a+r.useActions.length,0)},agents};
+}
+function agentAnalysis(id){const agent=agentMap.get(id);if(!agent)return null;const rs=resultsForAgent(id);const a=analyzeAgent(agent,rs);return{agent:{id:agent.id,name:agent.name,type:agent.type,goal:agent.goal,promptSnapshot:agent.promptSnapshot},...a,calls:rs.map(r=>({callId:r.callId,contactName:callMap.get(r.callId)?.contactName,startedAt:callMap.get(r.callId)?.startedAt,health:r.health,goalCompleted:r.kpis.goalCompleted,deviationCount:r.deviations.length}))};}
+function callDetail(id){const call=callMap.get(id);const result=resultMap.get(id);if(!call||!result)return null;const agent=agentMap.get(call.agentId);return{call,agent:{id:agent.id,name:agent.name,goal:agent.goal},result};}
+function useActionsQueue(){const items=[];for(const r of resultMap.values()){const call=callMap.get(r.callId);r.useActions.forEach(ua=>items.push({...ua,agentId:r.agentId,contactName:call?.contactName,startedAt:call?.startedAt}));}return items.sort((a,b)=>(a.reason==="human_review"?-1:1)-(b.reason==="human_review"?-1:1));}
+
+/* Local dispatcher mimicking the server's JSON API. */
+function api(p){
+  if(p==="/api/overview")return Promise.resolve(overview());
+  if(p==="/api/use-actions")return Promise.resolve(useActionsQueue());
+  if(p.startsWith("/api/agents/"))return Promise.resolve(agentAnalysis(decodeURIComponent(p.split("/")[3])));
+  if(p.startsWith("/api/calls/"))return Promise.resolve(callDetail(decodeURIComponent(p.split("/")[3])));
+  return Promise.resolve(null);
+}
+
+/* ============================ VUE APP (from public/app.js) ============================ */
+const {createApp,ref,reactive,onMounted,computed}=Vue;
+const healthClass=h=>h>=70?"g":h>=40?"w":"b";
+const pct=n=>`${Math.round(n*100)}%`;
+const fmtType=t=>(t||"").replace(/_/g," ");
+const fmtDate=s=>s?new Date(s).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+createApp({
+  setup(){
+    const view=reactive({name:"overview",agentId:null,callId:null});const loading=ref(true);const overview=ref(null);const agent=ref(null);const call=ref(null);const useActions=ref([]);
+    async function goOverview(){view.name="overview";loading.value=true;[overview.value,useActions.value]=await Promise.all([api("/api/overview"),api("/api/use-actions")]);loading.value=false;}
+    async function goAgent(id){view.name="agent";view.agentId=id;loading.value=true;agent.value=await api(`/api/agents/${id}`);loading.value=false;}
+    async function goCall(id){view.name="call";view.callId=id;loading.value=true;call.value=await api(`/api/calls/${id}`);loading.value=false;}
+    onMounted(goOverview);
+    const flaggedSpans=computed(()=>(call.value?.result?.deviations||[]).filter(d=>d.span));
+    function turnFlagged(turn){return flaggedSpans.value.some(d=>turn.tStart>=d.span.start-0.01&&turn.tStart<=d.span.end+0.01);}
+    return{view,loading,overview,agent,call,useActions,goOverview,goAgent,goCall,healthClass,pct,fmtType,fmtDate,turnFlagged};
+  },
+  template:`
+  <div class="app">
+    <header class="top"><div><h1>Voice AI Observability Copilot</h1><div class="sub">Automated Monitor + Analyze for HighLevel Voice AI agents</div></div><a class="btn" @click="goOverview">Overview</a></header>
+    <div class="banner">Standalone preview — runs the exact engine + analysis in your browser on the sample transcripts. No backend/LLM. Click agents and calls to drill in.</div>
+    <div v-if="loading" class="empty">Loading…</div>
+    <template v-else-if="view.name==='overview'">
+      <div class="kpis" v-if="overview">
+        <div class="kpi"><div class="label">Calls scored</div><div class="value">{{overview.portfolio.callsScored}}</div></div>
+        <div class="kpi"><div class="label">Goal completion</div><div class="value">{{pct(overview.portfolio.goalCompletionRate)}}</div></div>
+        <div class="kpi"><div class="label">Avg health</div><div class="value" :class="'health '+healthClass(overview.portfolio.avgHealth)">{{overview.portfolio.avgHealth}}</div></div>
+        <div class="kpi"><div class="label">Use-Actions open</div><div class="value">{{overview.portfolio.openUseActions}}</div></div>
+      </div>
+      <div class="card"><h2>Agent health</h2>
+        <table><thead><tr><th>Agent</th><th>Calls</th><th>Goal rate</th><th>Top failure</th><th>Health</th><th></th></tr></thead><tbody>
+          <tr v-for="a in overview.agents" :key="a.id" class="clickable" @click="goAgent(a.id)">
+            <td><strong>{{a.name}}</strong><div class="muted">{{a.goal}}</div></td><td>{{a.callsScored}}</td><td>{{pct(a.goalCompletionRate)}}</td>
+            <td><span class="pill" :class="a.topFailure?'warn':'good'">{{a.topFailure?fmtType(a.topFailure):'none'}}</span></td>
+            <td><span class="health" :class="healthClass(a.avgHealth)">{{a.avgHealth}}</span></td>
+            <td><span v-if="a.needsAttention" class="pill bad">needs attention</span></td></tr>
+        </tbody></table></div>
+      <div class="card"><h2>Use-Actions queue <span class="muted">— segments needing a human or worth training on</span></h2>
+        <div v-if="!useActions.length" class="empty">Nothing flagged.</div>
+        <table v-else><thead><tr><th>Reason</th><th>Contact</th><th>Note</th><th>When</th><th></th></tr></thead><tbody>
+          <tr v-for="(u,i) in useActions" :key="i" class="clickable" @click="goCall(u.callId)">
+            <td><span class="pill" :class="u.reason==='human_review'?'bad':'mute'">{{fmtType(u.reason)}}</span></td><td>{{u.contactName}}</td>
+            <td class="muted">{{u.note}}</td><td class="muted">{{fmtDate(u.startedAt)}}</td><td><a>view →</a></td></tr>
+        </tbody></table></div>
+    </template>
+    <template v-else-if="view.name==='agent'&&agent">
+      <div class="crumbs"><a @click="goOverview">Overview</a><span>{{agent.agent.name}}</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Calls scored</div><div class="value">{{agent.summary.callsScored}}</div></div>
+        <div class="kpi"><div class="label">Goal completion</div><div class="value">{{pct(agent.summary.goalCompletionRate)}}</div></div>
+        <div class="kpi"><div class="label">Avg health</div><div class="value" :class="'health '+healthClass(agent.summary.avgHealth)">{{agent.summary.avgHealth}}</div></div>
+        <div class="kpi"><div class="label">Open recs</div><div class="value">{{agent.summary.openRecommendations}}</div></div>
+      </div>
+      <div class="split"><div><div class="card"><h2>Recommendations <span class="muted">— ranked by severity × frequency</span></h2>
+        <div v-if="!agent.recommendations.length" class="empty">No issues found.</div>
+        <div v-for="r in agent.recommendations" :key="r.signature" class="rec">
+          <div class="rhead"><span class="title">{{r.title}}</span><span class="pill" :class="r.severity==='high'?'bad':r.severity==='medium'?'warn':'mute'">{{r.severity}}</span></div>
+          <div class="why">{{r.rationale}}</div><div class="diff">{{r.proposedPromptDiff}}</div>
+          <div class="meta"><span class="tag">{{r.frequency}} call(s)</span> <span class="tag">confidence {{pct(r.confidence)}}</span> <span class="src" :class="r.source">{{r.source==='llm'?'LLM-written':'rule-based'}}</span> &nbsp;·&nbsp; evidence: <a v-for="cid in r.supportingCallIds" :key="cid" @click="goCall(cid)">{{cid}} </a></div>
+        </div></div></div>
+      <div><div class="card"><h2>Failure breakdown</h2><table><tbody><tr v-for="(n,type) in agent.failureBreakdown" :key="type"><td>{{fmtType(type)}}</td><td style="text-align:right"><strong>{{n}}</strong></td></tr></tbody></table><div v-if="!Object.keys(agent.failureBreakdown).length" class="empty">Clean.</div></div>
+        <div class="card"><h2>Calls</h2><table><tbody><tr v-for="c in agent.calls" :key="c.callId" class="clickable" @click="goCall(c.callId)"><td>{{c.contactName}}<div class="muted">{{fmtDate(c.startedAt)}}</div></td><td style="text-align:center"><span class="pill" :class="c.goalCompleted?'good':'bad'">{{c.goalCompleted?'goal met':'missed'}}</span></td><td style="text-align:right" class="health" :class="healthClass(c.health)">{{c.health}}</td></tr></tbody></table></div></div></div>
+    </template>
+    <template v-else-if="view.name==='call'&&call">
+      <div class="crumbs"><a @click="goOverview">Overview</a><a @click="goAgent(call.call.agentId)">{{call.agent.name}}</a><span>{{call.call.contactName}}</span></div>
+      <div class="split"><div class="card transcript"><h2>Transcript <span class="muted">— flagged segments highlighted</span></h2>
+        <div v-for="(t,i) in call.call.transcript" :key="i" class="turn" :class="{flag:turnFlagged(t)}"><div class="role">{{t.role}}</div><div><div>{{t.text}}</div><div class="t">{{t.tStart}}s–{{t.tEnd}}s</div></div></div></div>
+      <div><div class="card"><h2>KPI checklist</h2><ul class="checklist">
+        <li><span class="dot" :class="call.result.kpis.goalCompleted?'g':'b'"></span> Goal completed</li>
+        <li v-for="s in call.result.kpis.steps" :key="s.key"><span class="dot" :class="s.passed?'g':'b'"></span> {{s.label}}</li>
+        <li><span class="dot" :class="call.result.kpis.phoneCaptured?'g':'b'"></span> Callback number captured</li></ul>
+        <div class="meta">Sentiment: {{call.result.kpis.sentiment.start}} → {{call.result.kpis.sentiment.end}} ({{call.result.kpis.sentiment.label}}) · {{call.result.kpis.turns}} turns · {{call.result.kpis.durationSec}}s · health <span class="health" :class="healthClass(call.result.health)">{{call.result.health}}</span></div></div>
+      <div class="card"><h2>Deviations</h2><div v-if="!call.result.deviations.length" class="empty">None. Clean call.</div>
+        <div v-for="(d,i) in call.result.deviations" :key="i" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="pill" :class="d.severity==='high'?'bad':d.severity==='medium'?'warn':'mute'">{{fmtType(d.type)}}</span><div class="muted" style="margin-top:4px">{{d.evidence}}</div><div v-if="d.span" class="t">at {{d.span.start}}s–{{d.span.end}}s</div></div></div></div></div>
+    </template>
+  </div>`
+}).mount("#app");
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+[
+  {
+    "id": "call_d1",
+    "ghlCallId": "CL-1001",
+    "agentId": "agent_dental_booking",
+    "contactName": "Maria Alvarez",
+    "contactId": "ct_501",
+    "direction": "inbound",
+    "startedAt": "2026-06-30T15:02:00Z",
+    "durationSec": 142,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling Bright Smile Dental, how can I help you today?", "tStart": 0, "tEnd": 4 },
+      { "role": "caller", "text": "Hi, I'd like to book a cleaning.", "tStart": 4, "tEnd": 7 },
+      { "role": "agent", "text": "Happy to help. May I have your name please?", "tStart": 7, "tEnd": 10 },
+      { "role": "caller", "text": "Maria Alvarez.", "tStart": 10, "tEnd": 12 },
+      { "role": "agent", "text": "Thanks Maria. What's the best number to reach you?", "tStart": 12, "tEnd": 15 },
+      { "role": "caller", "text": "It's 415-555-0182.", "tStart": 15, "tEnd": 19 },
+      { "role": "agent", "text": "Great. And just to offer the right times, what time zone are you in?", "tStart": 19, "tEnd": 23 },
+      { "role": "caller", "text": "Pacific.", "tStart": 23, "tEnd": 24 },
+      { "role": "agent", "text": "Perfect. We have an opening Thursday at 10am Pacific, does that work?", "tStart": 24, "tEnd": 29 },
+      { "role": "caller", "text": "Yes that's great.", "tStart": 29, "tEnd": 31 },
+      { "role": "agent", "text": "Wonderful, you're booked for Thursday at 10am. See you then!", "tStart": 31, "tEnd": 36 }
+    ]
+  },
+  {
+    "id": "call_d2",
+    "ghlCallId": "CL-1002",
+    "agentId": "agent_dental_booking",
+    "contactName": "Tom Becker",
+    "contactId": "ct_502",
+    "direction": "inbound",
+    "startedAt": "2026-06-30T16:20:00Z",
+    "durationSec": 121,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling Bright Smile Dental, how can I help?", "tStart": 0, "tEnd": 4 },
+      { "role": "caller", "text": "I need to see someone about a toothache.", "tStart": 4, "tEnd": 7 },
+      { "role": "agent", "text": "Sorry to hear that. Can I get your name?", "tStart": 7, "tEnd": 10 },
+      { "role": "caller", "text": "Tom Becker.", "tStart": 10, "tEnd": 12 },
+      { "role": "agent", "text": "Thanks Tom. What's a good callback number?", "tStart": 12, "tEnd": 15 },
+      { "role": "caller", "text": "212-555-0147.", "tStart": 15, "tEnd": 19 },
+      { "role": "agent", "text": "We have an opening tomorrow at 9am, does that work?", "tStart": 19, "tEnd": 23 },
+      { "role": "caller", "text": "Wait, 9am your time? I'm on the East Coast, that's confusing.", "tStart": 23, "tEnd": 28 },
+      { "role": "agent", "text": "It's 9am. Would you like it?", "tStart": 28, "tEnd": 31 },
+      { "role": "caller", "text": "I'm not sure what that is for me. Let me call back later.", "tStart": 31, "tEnd": 36 },
+      { "role": "agent", "text": "Okay, thanks for calling.", "tStart": 36, "tEnd": 38 }
+    ]
+  },
+  {
+    "id": "call_d3",
+    "ghlCallId": "CL-1003",
+    "agentId": "agent_dental_booking",
+    "contactName": "Priya Nair",
+    "contactId": "ct_503",
+    "direction": "inbound",
+    "startedAt": "2026-07-01T14:05:00Z",
+    "durationSec": 98,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling Bright Smile Dental, how may I help you?", "tStart": 0, "tEnd": 4 },
+      { "role": "caller", "text": "I want to book a checkup.", "tStart": 4, "tEnd": 6 },
+      { "role": "agent", "text": "Sure, who am I speaking with?", "tStart": 6, "tEnd": 9 },
+      { "role": "caller", "text": "Priya Nair.", "tStart": 9, "tEnd": 11 },
+      { "role": "agent", "text": "Thanks Priya. What time zone are you in?", "tStart": 11, "tEnd": 14 },
+      { "role": "caller", "text": "Central.", "tStart": 14, "tEnd": 15 },
+      { "role": "agent", "text": "We have Friday at 2pm Central, does that work?", "tStart": 15, "tEnd": 19 },
+      { "role": "caller", "text": "Yes.", "tStart": 19, "tEnd": 20 },
+      { "role": "agent", "text": "Great, I've scheduled you for Friday at 2pm.", "tStart": 20, "tEnd": 24 }
+    ]
+  },
+  {
+    "id": "call_d4",
+    "ghlCallId": "CL-1004",
+    "agentId": "agent_dental_booking",
+    "contactName": "Greg Ottoman",
+    "contactId": "ct_504",
+    "direction": "inbound",
+    "startedAt": "2026-07-01T18:40:00Z",
+    "durationSec": 176,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling Bright Smile Dental, how can I help?", "tStart": 0, "tEnd": 4 },
+      { "role": "caller", "text": "I've been on hold twice already, this is ridiculous.", "tStart": 4, "tEnd": 8 },
+      { "role": "agent", "text": "May I have your name?", "tStart": 8, "tEnd": 10 },
+      { "role": "caller", "text": "You people keep asking the same thing. I'm really frustrated.", "tStart": 10, "tEnd": 15 },
+      { "role": "agent", "text": "What's the best number to reach you?", "tStart": 15, "tEnd": 18 },
+      { "role": "caller", "text": "That's not helpful. I just want to talk to a person.", "tStart": 18, "tEnd": 23 },
+      { "role": "agent", "text": "We have an opening Monday at 11am, does that work?", "tStart": 23, "tEnd": 27 },
+      { "role": "caller", "text": "No. This is a waste of time. Forget it.", "tStart": 27, "tEnd": 31 },
+      { "role": "agent", "text": "Okay, thanks for calling.", "tStart": 31, "tEnd": 33 }
+    ]
+  },
+  {
+    "id": "call_d5",
+    "ghlCallId": "CL-1005",
+    "agentId": "agent_dental_booking",
+    "contactName": "Susan Lee",
+    "contactId": "ct_505",
+    "direction": "inbound",
+    "startedAt": "2026-07-01T19:12:00Z",
+    "durationSec": 388,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling Bright Smile Dental, how can I help you today?", "tStart": 0, "tEnd": 4 },
+      { "role": "caller", "text": "I'd like to book a cleaning for my son.", "tStart": 4, "tEnd": 7 },
+      { "role": "agent", "text": "Of course. May I have your name?", "tStart": 7, "tEnd": 10 },
+      { "role": "caller", "text": "Susan Lee.", "tStart": 10, "tEnd": 12 },
+      { "role": "agent", "text": "Thanks. And the best callback number?", "tStart": 12, "tEnd": 15 },
+      { "role": "caller", "text": "503-555-0190.", "tStart": 15, "tEnd": 19 },
+      { "role": "agent", "text": "What time zone are you in?", "tStart": 19, "tEnd": 22 },
+      { "role": "caller", "text": "Pacific.", "tStart": 30, "tEnd": 31 },
+      { "role": "agent", "text": "We have Tuesday at 3pm Pacific, does that work?", "tStart": 45, "tEnd": 49 },
+      { "role": "caller", "text": "Let me check my calendar... yes that works.", "tStart": 49, "tEnd": 54 },
+      { "role": "agent", "text": "Great, you're booked for Tuesday at 3pm.", "tStart": 54, "tEnd": 58 }
+    ]
+  },
+  {
+    "id": "call_s1",
+    "ghlCallId": "CL-2001",
+    "agentId": "agent_solar_qual",
+    "contactName": "Derek Fields",
+    "contactId": "ct_601",
+    "direction": "inbound",
+    "startedAt": "2026-06-30T17:00:00Z",
+    "durationSec": 108,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling SunPath, how can I help?", "tStart": 0, "tEnd": 3 },
+      { "role": "caller", "text": "I saw your ad about solar savings.", "tStart": 3, "tEnd": 6 },
+      { "role": "agent", "text": "Great! Do you own your home?", "tStart": 6, "tEnd": 9 },
+      { "role": "caller", "text": "Yes, I own it.", "tStart": 9, "tEnd": 11 },
+      { "role": "agent", "text": "And roughly what's your average monthly electricity bill?", "tStart": 11, "tEnd": 15 },
+      { "role": "caller", "text": "About $210.", "tStart": 15, "tEnd": 17 },
+      { "role": "agent", "text": "You're a great fit. Let's schedule a consultation. How's Thursday at 4pm?", "tStart": 17, "tEnd": 22 },
+      { "role": "caller", "text": "Works for me.", "tStart": 22, "tEnd": 24 },
+      { "role": "agent", "text": "Booked. A specialist will call you Thursday at 4pm.", "tStart": 24, "tEnd": 28 }
+    ]
+  },
+  {
+    "id": "call_s2",
+    "ghlCallId": "CL-2002",
+    "agentId": "agent_solar_qual",
+    "contactName": "Angela Ruiz",
+    "contactId": "ct_602",
+    "direction": "inbound",
+    "startedAt": "2026-07-01T13:30:00Z",
+    "durationSec": 96,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling SunPath, how can I help?", "tStart": 0, "tEnd": 3 },
+      { "role": "caller", "text": "I'm interested in solar for my house.", "tStart": 3, "tEnd": 6 },
+      { "role": "agent", "text": "Do you own your home?", "tStart": 6, "tEnd": 9 },
+      { "role": "caller", "text": "Yes I do.", "tStart": 9, "tEnd": 11 },
+      { "role": "agent", "text": "And what's your average monthly electricity bill?", "tStart": 11, "tEnd": 15 },
+      { "role": "caller", "text": "Around $200. And honestly I'd love to get started soon.", "tStart": 15, "tEnd": 20 },
+      { "role": "agent", "text": "Great, thanks for the info. Have a nice day!", "tStart": 20, "tEnd": 24 }
+    ]
+  },
+  {
+    "id": "call_s3",
+    "ghlCallId": "CL-2003",
+    "agentId": "agent_solar_qual",
+    "contactName": "Frank Doyle",
+    "contactId": "ct_603",
+    "direction": "inbound",
+    "startedAt": "2026-07-01T16:45:00Z",
+    "durationSec": 61,
+    "outcome": "completed",
+    "transcript": [
+      { "role": "agent", "text": "Thanks for calling SunPath, how can I help?", "tStart": 0, "tEnd": 3 },
+      { "role": "caller", "text": "Do you do solar for apartments?", "tStart": 3, "tEnd": 6 },
+      { "role": "agent", "text": "Do you own your home?", "tStart": 6, "tEnd": 9 },
+      { "role": "caller", "text": "No, I rent.", "tStart": 9, "tEnd": 11 },
+      { "role": "agent", "text": "Understood. Solar works best for homeowners, so it may not be a fit right now. Thanks for calling!", "tStart": 11, "tEnd": 17 }
+    ]
+  }
+]

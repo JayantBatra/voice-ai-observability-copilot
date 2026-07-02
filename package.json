@@ -1,0 +1,15 @@
+{
+  "name": "voice-ai-observability-copilot",
+  "version": "0.1.0",
+  "description": "Observability Copilot for HighLevel Voice AI agents — automates the Monitor + Analyze loops.",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "sync": "node scripts/sync.mjs",
+    "simulate": "node scripts/simulate-call.mjs"
+  },
+  "dependencies": {},
+  "license": "MIT"
+}
