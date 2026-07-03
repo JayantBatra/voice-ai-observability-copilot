@@ -8,7 +8,8 @@
     "start": "node server.js",
     "test": "node --test",
     "sync": "node scripts/sync.mjs",
-    "simulate": "node scripts/simulate-call.mjs"
+    "simulate": "node scripts/simulate-call.mjs",
+    "test:webhook": "node scripts/send-webhook.mjs"
   },
   "dependencies": {},
   "license": "MIT"

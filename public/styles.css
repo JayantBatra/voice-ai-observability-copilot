@@ -62,6 +62,11 @@ ul.checklist { padding: 0; margin: 0; }
 .tag { background: var(--chip); color: var(--muted); border-radius: 6px; padding: 1px 7px; font-size: 11px; }
 .btn { border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
 .btn:hover { border-color: var(--brand); color: var(--brand-ink); }
+.btn:disabled { cursor: not-allowed; opacity: .6; }
+.btn.action { margin-top: 10px; }
+.actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.toast { background: #e5f5ee; color: var(--good); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
+.toast.error { background: #fdeaee; color: var(--bad); }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); padding: 12px 0; }
 @media (max-width: 820px) { .kpis { grid-template-columns: repeat(2, 1fr); } .split { grid-template-columns: 1fr; } }

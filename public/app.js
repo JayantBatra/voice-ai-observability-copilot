@@ -5,6 +5,16 @@
 const { createApp, ref, reactive, onMounted, computed } = Vue;
 
 const api = (p) => fetch(p).then(r => r.json());
+const postJson = async (p, body = {}) => {
+  const res = await fetch(p, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Action failed");
+  return data;
+};
 
 const healthClass = (h) => (h >= 70 ? "g" : h >= 40 ? "w" : "b");
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -24,6 +34,8 @@ const app = createApp({
     const agent = ref(null);
     const call = ref(null);
     const useActions = ref([]);
+    const applying = ref(false);
+    const actionMessage = ref(null);
     const params = new URLSearchParams(window.location.search);
     const pageContext = {
       locationId: params.get("location_id"),
@@ -45,6 +57,43 @@ const app = createApp({
       call.value = await api(`/api/calls/${id}`);
       loading.value = false;
     }
+    function showAction(message, type = "success") {
+      actionMessage.value = { message, type };
+      setTimeout(() => { actionMessage.value = null; }, 3500);
+    }
+    async function applyPromptFix(rec) {
+      if (!agent.value?.agent?.id) return;
+      applying.value = true;
+      try {
+        await postJson(`/api/agents/${agent.value.agent.id}/apply-prompt`, {
+          proposedPromptDiff: rec.proposedPromptDiff,
+          changeReason: `Voice AI Copilot recommendation: ${rec.title}`
+        });
+        showAction("Prompt update sent to HighLevel.");
+      } catch (err) {
+        showAction(err.message, "error");
+      } finally {
+        applying.value = false;
+      }
+    }
+    async function tagCurrentContact(tag = "needs-human-followup") {
+      if (!call.value?.call?.id) return;
+      try {
+        await postJson(`/api/calls/${call.value.call.id}/tag-contact`, { tags: [tag] });
+        showAction(`Contact tagged: ${tag}`);
+      } catch (err) {
+        showAction(err.message, "error");
+      }
+    }
+    async function addAnalysisNote() {
+      if (!call.value?.call?.id) return;
+      try {
+        await postJson(`/api/calls/${call.value.call.id}/add-note`);
+        showAction("Analysis note added to HighLevel contact.");
+      } catch (err) {
+        showAction(err.message, "error");
+      }
+    }
 
     onMounted(goOverview);
 
@@ -54,8 +103,9 @@ const app = createApp({
       return flaggedSpans.value.some(d => turn.tStart >= d.span.start - 0.01 && turn.tStart <= d.span.end + 0.01);
     }
 
-    return { view, loading, overview, agent, call, useActions, pageContext,
-      goOverview, goAgent, goCall, healthClass, pct, fmtType, fmtDate, modeLabel, turnFlagged };
+    return { view, loading, overview, agent, call, useActions, pageContext, applying, actionMessage,
+      goOverview, goAgent, goCall, applyPromptFix, tagCurrentContact, addAnalysisNote,
+      healthClass, pct, fmtType, fmtDate, modeLabel, turnFlagged };
   },
   template: `
   <div class="app">
@@ -76,6 +126,7 @@ const app = createApp({
       <span v-if="overview.status.lastSyncAt">Last synced {{ fmtDate(overview.status.lastSyncAt) }}</span>
       <span v-if="overview.status.lastAnalyzedAt">Last analyzed {{ fmtDate(overview.status.lastAnalyzedAt) }}</span>
     </div>
+    <div v-if="actionMessage" class="toast" :class="actionMessage.type">{{ actionMessage.message }}</div>
 
     <div v-if="loading" class="empty">Loading…</div>
 
@@ -145,6 +196,9 @@ const app = createApp({
               </div>
               <div class="why">{{ r.rationale }}</div>
               <div class="diff">{{ r.proposedPromptDiff }}</div>
+              <button class="btn action" @click="applyPromptFix(r)" :disabled="applying">
+                {{ applying ? 'Applying...' : 'Apply Fix to Agent' }}
+              </button>
               <div class="meta">
                 <span class="tag">{{ r.frequency }} call(s)</span>
                 <span class="tag">confidence {{ pct(r.confidence) }}</span>
@@ -215,6 +269,15 @@ const app = createApp({
           </div>
         </div>
         <div>
+          <div class="card">
+            <h2>HighLevel actions</h2>
+            <div class="muted">Write back approved operator actions to the live HighLevel contact.</div>
+            <div class="actions">
+              <button class="btn" @click="tagCurrentContact()">Tag Contact: Needs Human Follow-up</button>
+              <button class="btn" @click="tagCurrentContact('voice-ai-call-failed')">Tag Contact: Call Failed</button>
+              <button class="btn" @click="addAnalysisNote()">Add Analysis Note to Contact</button>
+            </div>
+          </div>
           <div class="card">
             <h2>KPI checklist</h2>
             <ul class="checklist">

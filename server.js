@@ -13,10 +13,11 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, normalize } from "node:path";
 import * as store from "./lib/store.js";
-import { normalizeCall, exchangeCode } from "./lib/ghl.js";
-import { saveTokens, hasTokens, listLocations } from "./lib/tokens.js";
+import { addContactNote, normalizeCall, exchangeCode, patchAgent, tagContact } from "./lib/ghl.js";
+import { saveTokens, hasTokens, listLocations, getValidAccessToken } from "./lib/tokens.js";
 import { verifyWebhook } from "./lib/webhook.js";
 import { syncLocation } from "./lib/sync.js";
+import { buildAnalysisNote, runOrchestrator } from "./lib/orchestrator.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(__dirname, "public");
@@ -24,6 +25,7 @@ const PORT = process.env.PORT || 3000;
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
 const processedWebhooks = new Set(); // idempotency on webhookId
+const CALL_EVENTS = new Set(["VoiceAICallCompleted", "OutboundCall", "InboundCall"]);
 
 function send(res, status, body, headers = {}) {
   const payload = typeof body === "string" ? body : JSON.stringify(body);
@@ -57,6 +59,54 @@ function readRawBody(req) {
   });
 }
 
+async function readJsonBody(req) {
+  const raw = await readRawBody(req);
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { throw new Error("invalid json"); }
+}
+
+function liveCallContext(callId) {
+  const call = store.getCall(callId);
+  const result = store.getResult(callId);
+  if (!call || !result) return { error: "call not found", status: 404 };
+  if (!call.locationId || !call.contactId) {
+    return { error: "This action requires a live HighLevel contact.", status: 400 };
+  }
+  return { call, result };
+}
+
+async function handleCallWebhook(raw) {
+  let body;
+  try { body = raw ? JSON.parse(raw) : {}; } catch { return { status: 400, body: { error: "invalid json" } }; }
+
+  if (body.webhookId && processedWebhooks.has(body.webhookId)) {
+    return { status: 200, body: { message: "already processed" } };
+  }
+  if (body.webhookId) processedWebhooks.add(body.webhookId);
+
+  if (body.type && !CALL_EVENTS.has(body.type)) {
+    return { status: 200, body: { success: false, reason: `ignored event type: ${body.type}` } };
+  }
+
+  const payload = body.data || body; // events wrap the record under `data`
+  const call = normalizeCall(payload);
+  if (!call.id || !call.agentId) return { status: 200, body: { success: false, reason: "not a scorable call event" } };
+  if (!store.getAgent(call.agentId)) {
+    return { status: 200, body: { success: false, reason: "unknown agent; run sync" } };
+  }
+
+  const result = store.upsertCall(call);
+  runOrchestrator({
+    call,
+    result,
+    recommendations: store.recommendationsForAgent(call.agentId)
+  }).then(r => {
+    if (!r.skipped) console.log(`[orchestrator] ${call.id}: ${r.outcomes.filter(o => o.ok).length}/${r.outcomes.length} write-back actions succeeded`);
+  }).catch(e => console.warn(`[orchestrator] skipped for ${call.id}: ${e.message}`));
+
+  return { status: 200, body: { success: true, ingested: call.id, health: result.health, deviations: result.deviations.length } };
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const path = url.pathname;
@@ -66,6 +116,54 @@ const server = createServer(async (req, res) => {
     if (path === "/api/status") return send(res, 200, store.status({ locations: listLocations() }));
     if (path === "/api/overview") return send(res, 200, { ...store.overview(), status: store.status({ locations: listLocations() }) });
     if (path === "/api/use-actions") return send(res, 200, store.useActionsQueue());
+    if (path.startsWith("/api/calls/") && path.endsWith("/tag-contact") && req.method === "POST") {
+      const callId = decodeURIComponent(path.split("/")[3]);
+      const ctx = liveCallContext(callId);
+      if (ctx.error) return send(res, ctx.status, { error: ctx.error });
+      const body = await readJsonBody(req);
+      const tags = Array.isArray(body.tags) && body.tags.length ? body.tags : ["needs-human-followup"];
+      const token = await getValidAccessToken(ctx.call.locationId);
+      await tagContact(token, ctx.call.contactId, tags);
+      return send(res, 200, { success: true, tags });
+    }
+    if (path.startsWith("/api/calls/") && path.endsWith("/add-note") && req.method === "POST") {
+      const callId = decodeURIComponent(path.split("/")[3]);
+      const ctx = liveCallContext(callId);
+      if (ctx.error) return send(res, ctx.status, { error: ctx.error });
+      const body = await readJsonBody(req);
+      const note = body.note || buildAnalysisNote({
+        call: ctx.call,
+        result: ctx.result,
+        recommendations: store.recommendationsForAgent(ctx.call.agentId)
+      });
+      const token = await getValidAccessToken(ctx.call.locationId);
+      await addContactNote(token, ctx.call.contactId, note);
+      return send(res, 200, { success: true });
+    }
+    if (path.startsWith("/api/agents/") && path.endsWith("/apply-prompt") && req.method === "POST") {
+      const agentId = decodeURIComponent(path.split("/")[3]);
+      const agent = store.getAgent(agentId);
+      if (!agent) return send(res, 404, { error: "agent not found" });
+      if (!agent.locationId) return send(res, 400, { error: "This action requires a live HighLevel agent." });
+      const body = await readJsonBody(req);
+      const proposed = body.proposedPromptDiff || "";
+      const agentPrompt = body.agentPrompt || [
+        agent.promptSnapshot || "",
+        "",
+        "Voice AI Copilot recommended adjustment:",
+        proposed.replace(/^\+\s*/, "")
+      ].join("\n").trim();
+      if (!agentPrompt && !body.welcomeMessage) {
+        return send(res, 400, { error: "Provide agentPrompt, welcomeMessage, or proposedPromptDiff" });
+      }
+      const update = {};
+      if (agentPrompt) update.agentPrompt = agentPrompt;
+      if (body.welcomeMessage) update.welcomeMessage = body.welcomeMessage;
+      const token = await getValidAccessToken(agent.locationId);
+      const result = await patchAgent(token, agentId, update);
+      store.upsertAgent({ ...agent, promptSnapshot: update.agentPrompt || agent.promptSnapshot });
+      return send(res, 200, { success: true, result });
+    }
     if (path.startsWith("/api/agents/")) {
       const id = decodeURIComponent(path.split("/")[3]);
       const data = await store.agentAnalysis(id);
@@ -78,31 +176,28 @@ const server = createServer(async (req, res) => {
     }
 
     // ---- Real-time ingestion (signature-verified) ----------------------
-    if (path === "/webhooks/ghl" && req.method === "POST") {
+    if ((path === "/webhooks/ghl" || path === "/webhooks/hl") && req.method === "POST") {
       const raw = await readRawBody(req);
       const verdict = verifyWebhook(raw, req.headers);
       if (!verdict.ok) {
         console.warn(`[webhook] rejected: ${verdict.reason}`);
         return send(res, 401, { error: "invalid signature" });
       }
+      const result = await handleCallWebhook(raw);
+      return send(res, result.status, result.body);
+    }
+
+    if (path === "/webhooks/hl-workflow" && req.method === "POST") {
+      const raw = await readRawBody(req);
+      const verdict = verifyWebhook(raw, req.headers);
+      if (!verdict.ok) {
+        console.warn(`[workflow] rejected: ${verdict.reason}`);
+        return send(res, 401, { error: "invalid signature" });
+      }
       let body;
       try { body = raw ? JSON.parse(raw) : {}; } catch { return send(res, 400, { error: "invalid json" }); }
-
-      // Respond fast; process idempotently.
-      if (body.webhookId && processedWebhooks.has(body.webhookId)) {
-        return send(res, 200, { message: "already processed" });
-      }
-      if (body.webhookId) processedWebhooks.add(body.webhookId);
-
-      const payload = body.data || body; // events wrap the record under `data`
-      const call = normalizeCall(payload);
-      if (!call.id || !call.agentId) return send(res, 200, { success: false, reason: "not a scorable call event" });
-      if (!store.getAgent(call.agentId)) {
-        // Unknown agent (e.g. installed after last sync) — skip gracefully.
-        return send(res, 200, { success: false, reason: "unknown agent; run sync" });
-      }
-      const result = store.upsertCall(call);
-      return send(res, 200, { success: true, ingested: call.id, health: result.health, deviations: result.deviations.length });
+      console.log(`[workflow] ${body.type || "unknown"} contact=${body.contactId || "n/a"} location=${body.locationId || "n/a"}`);
+      return send(res, 200, { success: true, received: body.type || "workflow" });
     }
 
     // ---- OAuth install callback ----------------------------------------

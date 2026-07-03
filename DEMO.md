@@ -16,7 +16,9 @@ Mention that the Marketplace draft app is configured with:
 
 - Custom Page: `APP_URL/?location_id={{location.id}}&user_email={{user.email}}`
 - OAuth callback: `APP_URL/oauth/callback`
-- Webhook: `APP_URL/webhooks/ghl`
+- Marketplace webhook: `APP_URL/webhooks/ghl`
+- Global Settings webhook: `APP_URL/webhooks/hl`
+- Workflow webhook: `APP_URL/webhooks/hl-workflow`
 
 ### 0:30 - Install / Ingest
 
@@ -62,8 +64,16 @@ In the call viewer, show:
 - KPI checklist
 - deviations with timestamps
 - sentiment/turn/duration context
+- HighLevel action buttons for contact tagging, analysis notes, and prompt updates
 
-Close by explaining the loop: raw transcript -> KPI scoring -> deviation detection -> Use Action/recommendation -> operator updates the prompt/script.
+Explain the bidirectional loop:
+
+- scoring runs automatically after webhook/backfill ingestion
+- live HighLevel calls with contact context are tagged automatically
+- an analysis note is added to the contact
+- the operator can manually click **Apply Fix to Agent** after reviewing a prompt recommendation
+
+Close by explaining the loop: raw transcript -> KPI scoring -> deviation detection -> Use Action/recommendation -> tags/notes in HighLevel -> operator-approved prompt/script update.
 
 ## Fixture Fallback Demo
 
@@ -80,10 +90,12 @@ To show real-time ingestion behavior locally:
 
 ```bash
 VERIFY_WEBHOOKS=false node server.js
-npm run simulate
+npm run test:webhook
 ```
 
 Then refresh the dashboard and show that a new call was scored and reflected in the Use Actions/recommendations.
+
+Fixture calls do not have real HighLevel contact IDs, so write-back buttons show a safe message: `This action requires a live HighLevel contact.`
 
 ## What To Say
 
@@ -91,4 +103,5 @@ This is an assignment-scale observability copilot. The production-heavy pieces a
 
 - Monitor: ingest transcripts from HighLevel sync/webhooks or demo fixtures.
 - Analyze: score KPIs/deviations, rank failures, and generate prompt/script recommendations.
-- Dashboard: give operators a unified view, drilldown evidence, and Use Actions.
+- Dashboard: give operators a unified view, drilldown evidence, Use Actions, and manual write-back controls.
+- Bidirectional actions: live calls can auto-tag contacts and add analysis notes in HighLevel; prompt changes require an operator click.
